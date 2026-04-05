@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Connexion / Inscription</title>
+</head>
+<body>
+<h2>Inscription</h2>
+<input id="username" placeholder="Nom d'utilisateur">
+<button onclick="inscrire()">S'inscrire</button>
+
+<h2>Connexion</h2>
+<input id="loginUsername" placeholder="Nom d'utilisateur">
+<button onclick="login()">Se connecter</button>
+
+<script>
+const serverUrl = "https://backend-login-json.onrender.com"; // remplace par ton lien Render
+
+function inscrire() {
+  const username = document.getElementById("username").value;
+  fetch(serverUrl + "/register", {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({username})
+  }).then(res=>res.text()).then(alert);
+}
+
+function login() {
+  const username = document.getElementById("loginUsername").value;
+  fetch(serverUrl + "/login", {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({username})
+  }).then(res=>res.text()).then(alert);
+}
+</script>
+</body>
+</html>
