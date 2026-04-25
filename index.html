@@ -1003,7 +1003,7 @@
 
   </main>
 
-    <script type="module">
+  <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-app.js";
   import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-auth.js";
   import { getFirestore, doc, getDoc, collection, getDocs } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-firestore.js";
@@ -1161,18 +1161,24 @@
   }
 
   async function updateUserUI() {
+    console.log("updateUserUI appelé, currentUser:", currentUser, "userData:", userData);
+    
     if (currentUser && userData) {
-      document.getElementById('userName').textContent = userData.name || 'Utilisateur';
-      document.getElementById('userAvatar').textContent = (userData.name || 'U').charAt(0).toUpperCase();
+      const userName = userData.name || currentUser.displayName || 'Utilisateur';
+      const userInitial = userName.charAt(0).toUpperCase();
+      
+      document.getElementById('userName').textContent = userName;
+      document.getElementById('userAvatar').textContent = userInitial;
       document.getElementById('totalCourses').textContent = formationsList.length;
       
       const coursesCount = userData.courses?.length || 0;
       document.getElementById('statCourses').textContent = coursesCount;
+      
+      console.log("UI mise à jour - Nom:", userName, "Formations:", coursesCount);
     } else if (currentUser) {
-      document.getElementById('userName').textContent = 'Utilisateur';
-      document.getElementById('userAvatar').textContent = 'U';
-      document.getElementById('statCourses').textContent = '0';
-      document.getElementById('totalCourses').textContent = formationsList.length;
+      // On a currentUser mais pas encore userData, on recharge
+      console.log("currentUser existe mais pas userData, rechargement...");
+      await loadUserData();
     } else {
       document.getElementById('userName').textContent = 'Invité';
       document.getElementById('userAvatar').textContent = '?';
@@ -1182,7 +1188,12 @@
   }
 
   async function loadUserData() {
-    if (!currentUser) return;
+    if (!currentUser) {
+      console.log("loadUserData: pas de currentUser");
+      return;
+    }
+    
+    console.log("loadUserData pour UID:", currentUser.uid);
     
     try {
       const userRef = doc(db, "users", currentUser.uid);
@@ -1190,13 +1201,20 @@
       
       if (userDoc.exists()) {
         userData = userDoc.data();
+        console.log("Données utilisateur chargées:", userData);
       } else {
-        userData = { name: currentUser.displayName || 'Utilisateur', courses: [] };
+        console.log("Document utilisateur non trouvé, création d'un objet par défaut");
+        userData = { 
+          name: currentUser.displayName || 'Utilisateur', 
+          email: currentUser.email,
+          courses: [],
+          createdAt: new Date().toISOString()
+        };
       }
       await updateUserUI();
     } catch (error) {
       console.error("Erreur chargement user:", error);
-      userData = { name: 'Utilisateur', courses: [] };
+      userData = { name: 'Utilisateur', email: currentUser.email, courses: [] };
       await updateUserUI();
     }
   }
@@ -1205,6 +1223,7 @@
     try {
       const usersSnapshot = await getDocs(collection(db, "users"));
       const count = usersSnapshot.size;
+      console.log("Nombre d'étudiants:", count);
       const studentsElement = document.getElementById('studentsCount');
       if (studentsElement) studentsElement.textContent = count;
     } catch (error) {
@@ -1228,23 +1247,29 @@
     }
   };
 
+  // Écouteur d'état d'authentification
   onAuthStateChanged(auth, async (user) => {
+    console.log("onAuthStateChanged - utilisateur:", user?.uid || "aucun");
+    
     if (user) {
       currentUser = user;
       localStorage.setItem('NexFormation_current_user', user.uid);
       await loadUserData();
       renderFormations();
       await updateStudentsCount();
-      updateUserUI();
       
       setTimeout(() => {
         const notification = document.getElementById('notification');
         if (notification) {
+          const userName = userData?.name || user.displayName || 'Utilisateur';
+          notification.querySelector('.notification-content h4').textContent = 'Bienvenue ' + userName;
+          notification.querySelector('.notification-content p').textContent = 'Découvrez nos formations !';
           notification.classList.add('show');
           setTimeout(() => notification.classList.remove('show'), 4000);
         }
       }, 1000);
     } else {
+      console.log("Aucun utilisateur connecté, redirection vers login");
       const savedUid = localStorage.getItem('NexFormation_current_user');
       if (savedUid) {
         localStorage.removeItem('NexFormation_current_user');
@@ -1254,10 +1279,19 @@
       renderFormations();
       updateUserUI();
       updateStudentsCount();
+      
+      // Redirection si nécessaire
+      setTimeout(() => {
+        if (!currentUser) {
+          window.location.href = 'login.html';
+        }
+      }, 2000);
     }
   });
 
+  // Initialisation au chargement
   document.addEventListener('DOMContentLoaded', () => {
+    console.log("DOM chargé - initialisation");
     renderFormations();
     updateStudentsCount();
     document.getElementById('totalCourses').textContent = formationsList.length;
