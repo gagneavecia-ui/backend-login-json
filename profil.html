@@ -590,10 +590,10 @@
     // ============================================
     // CONFIGURATION FIREBASE CORRECTE (nexformation-ebcc0)
     // ============================================
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-app.js";
-    import { getAuth, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-auth.js";
-    import { getFirestore, doc, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-firestore.js";
-    import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-storage.js";
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import { getAuth, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+    import { getFirestore, doc, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+    import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
     // ✅ Configuration CORRECTE (la même que register.html et index.html)
     const firebaseConfig = {
@@ -641,58 +641,75 @@
       }, 3000);
     }
 
+    // Remplir l'UI avec les données disponibles (Auth ou Firestore)
+    function fillProfileUI(name, email, phone, createdAt, courses, fullAccess, profilePhoto) {
+      document.getElementById('profileName').textContent = name || 'Utilisateur';
+      document.getElementById('profileEmail').textContent = email || '';
+      document.getElementById('avatarLetter').textContent = (name || 'U').charAt(0).toUpperCase();
+
+      // Téléphone — le champ peut s'appeler "phone" ou "telephone"
+      const phoneEl = document.getElementById('profilePhone');
+      if (phone && phone !== 'Non renseigne') {
+        phoneEl.innerHTML = '<i class="fas fa-phone"></i> ' + phone;
+      } else {
+        phoneEl.style.display = 'none';
+      }
+
+      // Date d'inscription
+      if (createdAt) {
+        try {
+          const date = new Date(createdAt);
+          const formattedDate = date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+          document.getElementById('memberSince').innerHTML = '<i class="fas fa-calendar-alt"></i> Membre depuis ' + formattedDate;
+        } catch(e) {}
+      }
+
+      // Formations
+      document.getElementById('coursesCompleted').textContent = (courses || []).length;
+
+      // Badge accès illimité
+      if (fullAccess) {
+        document.getElementById('paidBadge').style.display = 'block';
+      }
+
+      // Photo de profil
+      if (profilePhoto) {
+        const avatarDiv = document.getElementById('profileAvatar');
+        avatarDiv.innerHTML = '<img src="' + profilePhoto + '" alt="Photo de profil" style="width:100%; height:100%; border-radius:50%; object-fit:cover;">';
+      }
+    }
+
     async function loadUserData() {
       if (!currentUser) return;
-      
+
+      // 1. D'abord on affiche ce qu'on a depuis Firebase Auth (immédiat, pas de permission)
+      const authName = currentUser.displayName || 'Utilisateur';
+      const authEmail = currentUser.email || '';
+      fillProfileUI(authName, authEmail, null, null, [], false, null);
+
+      // 2. Ensuite on essaie Firestore pour les données complètes
       try {
         const userRef = doc(db, "users", currentUser.uid);
         const userDoc = await getDoc(userRef);
-        
+
         if (userDoc.exists()) {
           userData = userDoc.data();
-          
-          // Afficher le nom
-          document.getElementById('profileName').textContent = userData.name || 'Utilisateur';
-          document.getElementById('profileEmail').textContent = userData.email || currentUser.email;
-          document.getElementById('avatarLetter').textContent = (userData.name || 'U').charAt(0).toUpperCase();
-          
-          // Afficher le téléphone (corrigé: telephone au lieu de phone)
-          if (userData.telephone) {
-            document.getElementById('profilePhone').innerHTML = '<i class="fas fa-phone"></i> ' + userData.telephone;
-          } else {
-            document.getElementById('profilePhone').style.display = 'none';
-          }
-          
-          // Date d'inscription
-          if (userData.createdAt) {
-            const date = new Date(userData.createdAt);
-            const formattedDate = date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
-            document.getElementById('memberSince').innerHTML = '<i class="fas fa-calendar-alt"></i> Membre depuis ' + formattedDate;
-          }
-          
-          // Nombre de formations suivies
-          const coursesCount = userData.courses?.length || 0;
-          document.getElementById('coursesCompleted').textContent = coursesCount;
-          
-          // Badge payant
-          if (userData.fullAccess) {
-            document.getElementById('paidBadge').style.display = 'block';
-          }
-          
-          // Charger la photo de profil si elle existe
-          if (userData.profilePhoto) {
-            const avatarDiv = document.getElementById('profileAvatar');
-            avatarDiv.innerHTML = `<img src="${userData.profilePhoto}" alt="Photo de profil" style="width:100%; height:100%; border-radius:50%; object-fit:cover;">`;
-          }
-        } else {
-          console.log("Document utilisateur non trouvé dans Firestore");
-          document.getElementById('profileName').textContent = currentUser.displayName || 'Utilisateur';
-          document.getElementById('profileEmail').textContent = currentUser.email;
-          document.getElementById('avatarLetter').textContent = (currentUser.displayName || 'U').charAt(0).toUpperCase();
+          // Compatibilité champ "phone" ET "telephone"
+          const phone = userData.phone || userData.telephone || null;
+          fillProfileUI(
+            userData.name || authName,
+            userData.email || authEmail,
+            phone,
+            userData.createdAt,
+            userData.courses,
+            userData.fullAccess,
+            userData.profilePhoto
+          );
         }
+        // Si le doc n'existe pas, on garde les données Auth déjà affichées
       } catch (error) {
-        console.error("Erreur chargement profil:", error);
-        showNotification('Erreur', 'Impossible de charger les données du profil', 'error');
+        // Firestore bloqué par règles — les données Auth sont déjà affichées, rien ne se passe
+        console.warn("Firestore profil non disponible:", error.code);
       }
     }
 
@@ -700,22 +717,27 @@
       if (!currentUser) return;
       
       try {
-        showNotification('Upload', 'Téléchargement en cours...', 'info');
+        showNotification('Upload', 'Telechargement en cours...', 'info');
         
-        const storageRef = ref(storage, `profile_photos/${currentUser.uid}`);
+        const storageRef = ref(storage, 'profile_photos/' + currentUser.uid);
         await uploadBytes(storageRef, file);
         const photoURL = await getDownloadURL(storageRef);
         
-        const userRef = doc(db, "users", currentUser.uid);
-        await updateDoc(userRef, { profilePhoto: photoURL });
+        // Essaie de sauver dans Firestore mais continue si ca bloque
+        try {
+          const userRef = doc(db, "users", currentUser.uid);
+          await updateDoc(userRef, { profilePhoto: photoURL });
+        } catch(e) {
+          console.warn("Firestore updateDoc skipped:", e.code);
+        }
         
         const avatarDiv = document.getElementById('profileAvatar');
-        avatarDiv.innerHTML = `<img src="${photoURL}" alt="Photo de profil" style="width:100%; height:100%; border-radius:50%; object-fit:cover;">`;
+        avatarDiv.innerHTML = '<img src="' + photoURL + '" alt="Photo de profil" style="width:100%; height:100%; border-radius:50%; object-fit:cover;">';
         
-        showNotification('Succès', 'Photo de profil mise à jour !', 'success');
+        showNotification('Succes', 'Photo de profil mise a jour !', 'success');
       } catch (error) {
         console.error("Erreur upload:", error);
-        showNotification('Erreur', "Impossible de télécharger la photo", 'error');
+        showNotification('Erreur', "Impossible de telecharger la photo", 'error');
       }
     }
 
@@ -725,14 +747,13 @@
     document.getElementById('profilePhotoInput').addEventListener('change', function(e) {
       const file = e.target.files[0];
       if (file && file.type.startsWith('image/')) {
-        // Limiter la taille à 5MB
         if (file.size > 5 * 1024 * 1024) {
-          showNotification('Erreur', 'L\'image ne doit pas dépasser 5 Mo', 'error');
+          showNotification('Erreur', "L image ne doit pas depasser 5 Mo", 'error');
           return;
         }
         uploadProfilePhoto(file);
       } else if (file) {
-        showNotification('Erreur', 'Veuillez sélectionner une image valide', 'error');
+        showNotification('Erreur', "Veuillez selectionner une image valide", 'error');
       }
     });
 

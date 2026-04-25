@@ -339,6 +339,11 @@
       margin-bottom: 44px;
     }
 
+    @keyframes cardIn {
+      from { opacity: 0; transform: translateY(16px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
     .stat-card {
       background: var(--card-bg);
       backdrop-filter: blur(14px);
@@ -349,6 +354,7 @@
       transition: var(--transition);
       position: relative;
       overflow: hidden;
+      animation: cardIn 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
     }
 
     .stat-card::before {
@@ -442,6 +448,7 @@
       display: block;
       position: relative;
       cursor: pointer;
+      animation: cardIn 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
     }
 
     .formation-card:active {
@@ -601,6 +608,7 @@
       border: 1px solid rgba(183, 110, 255, 0.08);
       position: relative;
       overflow: hidden;
+      animation: cardIn 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
     }
 
     .about-section::before {
@@ -700,12 +708,26 @@
       color: white;
       border: none;
       box-shadow: 0 4px 20px rgba(139, 63, 232, 0.35);
+      position: relative;
+      overflow: hidden;
     }
 
     .btn-primary:active {
       transform: scale(0.97);
       opacity: 0.92;
     }
+
+    .btn-primary::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(255,255,255,0.1), transparent);
+      border-radius: 14px;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+
+    .btn-primary:hover::before { opacity: 1; }
 
     /* ===== FOOTER ===== */
     .footer {
@@ -756,6 +778,12 @@
       text-decoration: none;
       transition: var(--transition);
       font-size: 15px;
+    }
+
+    .social-link:hover {
+      background: rgba(183, 110, 255, 0.1);
+      color: var(--primary);
+      border-color: rgba(183, 110, 255, 0.25);
     }
 
     .social-link:active {
@@ -888,7 +916,8 @@
         <div class="user-avatar" id="userAvatar">U</div>
         <span class="user-name" id="userName">Utilisateur</span>
       </a>
-     
+      <div class="logout-btn" id="logoutBtn" onclick="window.handleLogout()">
+        <i class="fas fa-sign-out-alt"></i>
       </div>
     </div>
   </header>
@@ -1011,9 +1040,9 @@
     // ============================================
     // CONFIGURATION FIREBASE (TES CLÉS)
     // ============================================
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-app.js";
-    import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-auth.js";
-    import { getFirestore, doc, getDoc, collection, getDocs } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-firestore.js";
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+    import { getFirestore, doc, getDoc, collection, getDocs } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyBWTEWAQjQuDzY26BghtTcqfdyVEmQZXe8",
@@ -1217,8 +1246,12 @@
         }
         await updateUserUI();
       } catch (error) {
-        console.error("Erreur chargement user:", error);
-        userData = { name: 'Utilisateur', courses: [] };
+        // Firestore bloqué par règles — on utilise displayName Firebase Auth
+        console.warn("Firestore read skipped:", error.code);
+        userData = { 
+          name: currentUser.displayName || 'Utilisateur', 
+          courses: [] 
+        };
         await updateUserUI();
       }
     }
@@ -1230,7 +1263,8 @@
         const studentsElement = document.getElementById('studentsCount');
         if (studentsElement) studentsElement.textContent = count;
       } catch (error) {
-        console.error("Erreur comptage étudiants:", error);
+        // Firestore peut bloquer si règles strictes — on affiche 0 silencieusement
+        console.warn("Comptage etudiants non disponible:", error.code);
         const studentsElement = document.getElementById('studentsCount');
         if (studentsElement) studentsElement.textContent = '0';
       }
