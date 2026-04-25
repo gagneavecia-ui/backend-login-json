@@ -530,7 +530,7 @@
       </div>
     </div>
 
-    <!-- ===== STATISTIQUES - UNIQUEMENT FORMATIONS SUIVIES ===== -->
+    <!-- ===== STATISTIQUES ===== -->
     <div class="stats-grid">
       <div class="stat-card">
         <div class="stat-value" id="coursesCompleted">0</div>
@@ -579,7 +579,7 @@
       </a>
     </div>
 
-    <button class="logout-btn" onclick="logout()">
+    <button class="logout-btn" onclick="window.logout()">
       <i class="fas fa-sign-out-alt"></i>
       Se déconnecter
     </button>
@@ -587,18 +587,23 @@
   </main>
 
   <script type="module">
+    // ============================================
+    // CONFIGURATION FIREBASE CORRECTE (nexformation-ebcc0)
+    // ============================================
     import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-app.js";
     import { getAuth, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-auth.js";
     import { getFirestore, doc, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-firestore.js";
     import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-storage.js";
 
+    // ✅ Configuration CORRECTE (la même que register.html et index.html)
     const firebaseConfig = {
-      apiKey: "AIzaSyApqCllug-lRe5iHa6Yimor61JIke7mYOc",
-      authDomain: "earnzone-70680.firebaseapp.com",
-      projectId: "earnzone-70680",
-      storageBucket: "earnzone-70680.firebasestorage.app",
-      messagingSenderId: "50852812524",
-      appId: "1:50852812524:web:f7e8245e5b247ab8e077c9"
+      apiKey: "AIzaSyBWTEWAQjQuDzY26BghtTcqfdyVEmQZXe8",
+      authDomain: "nexformation-ebcc0.firebaseapp.com",
+      databaseURL: "https://nexformation-ebcc0-default-rtdb.firebaseio.com",
+      projectId: "nexformation-ebcc0",
+      storageBucket: "nexformation-ebcc0.firebasestorage.app",
+      messagingSenderId: "592625968577",
+      appId: "1:592625968577:web:53482aea0414983427bb40"
     };
 
     const app = initializeApp(firebaseConfig);
@@ -639,38 +644,55 @@
     async function loadUserData() {
       if (!currentUser) return;
       
-      const userRef = doc(db, "users", currentUser.uid);
-      const userDoc = await getDoc(userRef);
-      
-      if (userDoc.exists()) {
-        userData = userDoc.data();
+      try {
+        const userRef = doc(db, "users", currentUser.uid);
+        const userDoc = await getDoc(userRef);
         
-        document.getElementById('profileName').textContent = userData.name || 'Utilisateur';
-        document.getElementById('profileEmail').textContent = userData.email || currentUser.email;
-        document.getElementById('avatarLetter').textContent = (userData.name || 'U').charAt(0).toUpperCase();
-        
-        if (userData.phone) {
-          document.getElementById('profilePhone').innerHTML = '<i class="fas fa-phone"></i> ' + userData.phone;
+        if (userDoc.exists()) {
+          userData = userDoc.data();
+          
+          // Afficher le nom
+          document.getElementById('profileName').textContent = userData.name || 'Utilisateur';
+          document.getElementById('profileEmail').textContent = userData.email || currentUser.email;
+          document.getElementById('avatarLetter').textContent = (userData.name || 'U').charAt(0).toUpperCase();
+          
+          // Afficher le téléphone (corrigé: telephone au lieu de phone)
+          if (userData.telephone) {
+            document.getElementById('profilePhone').innerHTML = '<i class="fas fa-phone"></i> ' + userData.telephone;
+          } else {
+            document.getElementById('profilePhone').style.display = 'none';
+          }
+          
+          // Date d'inscription
+          if (userData.createdAt) {
+            const date = new Date(userData.createdAt);
+            const formattedDate = date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+            document.getElementById('memberSince').innerHTML = '<i class="fas fa-calendar-alt"></i> Membre depuis ' + formattedDate;
+          }
+          
+          // Nombre de formations suivies
+          const coursesCount = userData.courses?.length || 0;
+          document.getElementById('coursesCompleted').textContent = coursesCount;
+          
+          // Badge payant
+          if (userData.fullAccess) {
+            document.getElementById('paidBadge').style.display = 'block';
+          }
+          
+          // Charger la photo de profil si elle existe
+          if (userData.profilePhoto) {
+            const avatarDiv = document.getElementById('profileAvatar');
+            avatarDiv.innerHTML = `<img src="${userData.profilePhoto}" alt="Photo de profil" style="width:100%; height:100%; border-radius:50%; object-fit:cover;">`;
+          }
+        } else {
+          console.log("Document utilisateur non trouvé dans Firestore");
+          document.getElementById('profileName').textContent = currentUser.displayName || 'Utilisateur';
+          document.getElementById('profileEmail').textContent = currentUser.email;
+          document.getElementById('avatarLetter').textContent = (currentUser.displayName || 'U').charAt(0).toUpperCase();
         }
-        
-        if (userData.createdAt) {
-          const date = new Date(userData.createdAt);
-          const formattedDate = date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
-          document.getElementById('memberSince').innerHTML = '<i class="fas fa-calendar-alt"></i> Membre depuis ' + formattedDate;
-        }
-        
-        const coursesCount = userData.courses?.length || 0;
-        document.getElementById('coursesCompleted').textContent = coursesCount;
-        
-        if (userData.fullAccess) {
-          document.getElementById('paidBadge').style.display = 'block';
-        }
-        
-         // Charger la photo de profil si elle existe
-        if (userData.profilePhoto) {
-          const avatarDiv = document.getElementById('profileAvatar');
-          avatarDiv.innerHTML = `<img src="${userData.profilePhoto}" alt="Photo de profil" style="width:100%; height:100%; border-radius:50%; object-fit:cover;">`;
-        }
+      } catch (error) {
+        console.error("Erreur chargement profil:", error);
+        showNotification('Erreur', 'Impossible de charger les données du profil', 'error');
       }
     }
 
@@ -678,6 +700,8 @@
       if (!currentUser) return;
       
       try {
+        showNotification('Upload', 'Téléchargement en cours...', 'info');
+        
         const storageRef = ref(storage, `profile_photos/${currentUser.uid}`);
         await uploadBytes(storageRef, file);
         const photoURL = await getDownloadURL(storageRef);
@@ -695,15 +719,26 @@
       }
     }
 
+    // ============================================
+    // ÉCOUTEUR CHANGEMENT PHOTO
+    // ============================================
     document.getElementById('profilePhotoInput').addEventListener('change', function(e) {
       const file = e.target.files[0];
       if (file && file.type.startsWith('image/')) {
+        // Limiter la taille à 5MB
+        if (file.size > 5 * 1024 * 1024) {
+          showNotification('Erreur', 'L\'image ne doit pas dépasser 5 Mo', 'error');
+          return;
+        }
         uploadProfilePhoto(file);
-      } else {
-        showNotification('Erreur', 'Veuillez sélectionner une image', 'error');
+      } else if (file) {
+        showNotification('Erreur', 'Veuillez sélectionner une image valide', 'error');
       }
     });
 
+    // ============================================
+    // DÉCONNEXION
+    // ============================================
     window.logout = async function() {
       try {
         await signOut(auth);
@@ -716,18 +751,23 @@
         console.error(error);
         showNotification('Erreur', 'Erreur lors de la déconnexion', 'error');
       }
-    }
+    };
 
+    // ============================================
+    // AUTHENTIFICATION
+    // ============================================
     onAuthStateChanged(auth, async (user) => {
       if (user) {
         currentUser = user;
         localStorage.setItem('NexFormation_current_user', user.uid);
         await loadUserData();
       } else {
+        // Vérifier si un utilisateur était sauvegardé localement
         const savedUid = localStorage.getItem('NexFormation_current_user');
         if (savedUid) {
           localStorage.removeItem('NexFormation_current_user');
         }
+        // Rediriger vers login
         window.location.href = 'login.html';
       }
     });
